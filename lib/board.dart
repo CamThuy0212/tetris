@@ -1,9 +1,19 @@
 import 'dart:async';
+import 'dart:math';
 
 import 'package:flutter/material.dart';
 import 'package:tetris/piece.dart';
 import 'package:tetris/pixel.dart';
 import 'package:tetris/values.dart';
+
+// create game board
+List<List<Tetromino?>> gameBoard = List.generate(
+  colLenght,
+  (i) => List.generate(
+    rowLenght,
+    (j) => null,
+  ),
+);
 
 class GameBoard extends StatefulWidget {
   const GameBoard({super.key});
@@ -27,7 +37,7 @@ class _GameBoardState extends State<GameBoard> {
     currentPiece.initializePiece();
 
     // frame refresh rate
-    Duration frameRate = const Duration(milliseconds: 800);
+    Duration frameRate = const Duration(milliseconds: 600);
     gameLoop(frameRate);
   }
 
@@ -37,6 +47,9 @@ class _GameBoardState extends State<GameBoard> {
       frameRate,
       (timer) {
         setState(() {
+          // check landing
+          checkLanding();
+
           //move current piece down
           currentPiece.movePice(Direction.down);
         });
@@ -64,7 +77,12 @@ class _GameBoardState extends State<GameBoard> {
       }
 
       // check if the piece is out of bounds (either too low or too far to the left or right)
-      if (row >= rowLenght || col < 0 || col >= rowLenght) {
+      if (row >= colLenght || col < 0 || col >= rowLenght) {
+        return true;
+      }
+
+      // check for collisions with other landed pieces
+      if (row >= 0 && gameBoard[row][col] != null) {
         return true;
       }
     }
@@ -73,29 +91,127 @@ class _GameBoardState extends State<GameBoard> {
     return false;
   }
 
+  void checkLanding() {
+    // if going down is occupied
+
+    if (checkCollision(Direction.down)) {
+      // mark position as occupied on the gameboard
+      for (int i = 0; i < currentPiece.position.length; i++) {
+        int row = (currentPiece.position[i] / rowLenght).floor();
+        int col = currentPiece.position[i] % rowLenght;
+        if (row >= 0 && col >= 0) {
+          gameBoard[row][col] = currentPiece.type;
+        }
+      }
+      // once landed create new piece
+      createNewPiece();
+    }
+  }
+
+  void createNewPiece() {
+    // create a random object to generate random tetromino types
+    Random rand = Random();
+
+    // create a new piece with random types
+    Tetromino randomType =
+        Tetromino.values[rand.nextInt(Tetromino.values.length)];
+    currentPiece = Piece(type: randomType);
+    currentPiece.initializePiece();
+  }
+
+  void moveLeft() {
+    if (!checkCollision(Direction.left)) {
+      setState(() {
+        currentPiece.movePice(Direction.left);
+      });
+    }
+  }
+
+  void rotatePiece() {}
+
+  void moveRight() {
+    if (!checkCollision(Direction.right)) {
+      setState(() {
+        currentPiece.movePice(Direction.right);
+      });
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.black,
-      body: GridView.builder(
-        itemCount: rowLenght * colLenght,
-        physics: const NeverScrollableScrollPhysics(),
-        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: rowLenght),
-        itemBuilder: (context, index) {
-          if (currentPiece.position.contains(index)) {
-            return Pixel(
-              color: Colors.yellow,
-              child: index.toString(),
-            );
-          } else {
-            return Pixel(
-              color: Colors.grey[900],
-              child: index.toString(),
-            );
-          }
-          return null;
-        },
+      body: Column(
+        children: [
+          // GAME GRID
+          Expanded(
+            child: GridView.builder(
+              itemCount: rowLenght * colLenght,
+              physics: const NeverScrollableScrollPhysics(),
+              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: rowLenght),
+              itemBuilder: (context, index) {
+                // get row and col of each index
+                int row = (index / rowLenght).floor();
+                int col = index % rowLenght;
+
+                if (currentPiece.position.contains(index)) {
+                  // current piece
+                  return Pixel(
+                    color: currentPiece.type.color,
+                    child: index.toString(),
+                  );
+                }
+                // landed piece
+                else if (gameBoard[row][col] != null) {
+                  return Pixel(
+                    color: gameBoard[row][col]?.color,
+                    child: index.toString(),
+                  );
+                }
+
+                // blank pixel
+                else {
+                  return Pixel(
+                    color: Colors.grey[900],
+                    child: index.toString(),
+                  );
+                }
+                return null;
+              },
+            ),
+          ),
+
+          // GAME CONTROLS
+          Padding(
+            padding: const EdgeInsets.only(bottom: 30),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: [
+                //left
+                IconButton(
+                  onPressed: moveLeft,
+                  icon: const Icon(Icons.arrow_back_ios),
+                  color: Colors.white,
+                ),
+
+                //rotate
+                IconButton(
+                  onPressed: rotatePiece,
+                  icon: const Icon(Icons.rotate_right),
+                  color: Colors.white,
+                ),
+
+                //right
+                IconButton(
+                  onPressed: moveRight,
+                  icon: const Icon(Icons.arrow_forward_ios),
+                  color: Colors.white,
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
